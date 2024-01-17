@@ -5,16 +5,20 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:XFuze"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
+        Title="XFuze" Height="485" Width="640">
     <Grid Loaded="MainWindowLoaded">
         <Grid.RowDefinitions>
-            <RowDefinition Height="7*"/>
-            <RowDefinition Height="80*"/>
+            <RowDefinition Height="39"/>
+            <RowDefinition Height="1*"/>
+            <RowDefinition Height="1*"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="800"/>
+            <ColumnDefinition Width="100"/>
+            <ColumnDefinition/>
+            <ColumnDefinition Width="60"/>
+            <ColumnDefinition Width="110"/>
         </Grid.ColumnDefinitions>
-        <Label Content="接口" HorizontalAlignment="Left" Margin="10,7,0,0" VerticalAlignment="Top" RenderTransformOrigin="0.5,0.506" FontSize="18" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Width="90" Grid.RowSpan="2" Height="33">
+        <Label Content="接口" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.506" FontSize="18" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Width="90" Height="33">
             <Label.RenderTransform>
                 <TransformGroup>
                     <ScaleTransform ScaleX="1" ScaleY="1"/>
@@ -24,8 +28,8 @@
                 </TransformGroup>
             </Label.RenderTransform>
         </Label>
-        <ComboBox x:Name="Interfaces" HorizontalAlignment="Left" Height="35" Margin="125,10,0,0" VerticalAlignment="Top" Width="255" Grid.RowSpan="2"/>
-        <Label Content="设备" HorizontalAlignment="Left" Margin="10,30,0,0" VerticalAlignment="Top" RenderTransformOrigin="0.5,0.493" FontSize="18" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Width="90" Height="33" Grid.Row="1">
+        <ComboBox x:Name="Interfaces" Margin="5,5,5,5" Grid.Column="1"/>
+        <Label Content="设备" HorizontalAlignment="Center" Margin="0,5,0,0" VerticalAlignment="Top" RenderTransformOrigin="0.5,0.493" FontSize="18" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Width="90" Height="33" Grid.Row="1">
             <Label.RenderTransform>
                 <TransformGroup>
                     <ScaleTransform ScaleX="1" ScaleY="1"/>
@@ -35,7 +39,20 @@
                 </TransformGroup>
             </Label.RenderTransform>
         </Label>
-        <TreeView x:Name="Devices" HorizontalAlignment="Left" Height="190" Margin="125,30,0,0" Grid.Row="1" VerticalAlignment="Top" Width="255"/>
+        <TreeView x:Name="Devices" Grid.Row="1" Grid.Column="1" Margin="5,5,5,5" Grid.ColumnSpan="2"/>
+        <Label Content="数据" HorizontalAlignment="Center" Margin="0,5,0,0" VerticalAlignment="Top" RenderTransformOrigin="0.5,0.493" FontSize="18" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Width="90" Height="33" Grid.Row="2">
+            <Label.RenderTransform>
+                <TransformGroup>
+                    <ScaleTransform ScaleX="1" ScaleY="1"/>
+                    <SkewTransform/>
+                    <RotateTransform/>
+                    <TranslateTransform X="0" Y="-0.48"/>
+                </TransformGroup>
+            </Label.RenderTransform>
+        </Label>
+        <TextBox x:Name="Data" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Margin="5,5,5,5"/>
+        <TextBox x:Name="DeviceId" Margin="5,5,5,5" Grid.Column="2" TextAlignment="Center" FontSize="18" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
+        <Button x:Name="StartButton" Content="侦听" Click="StartCapture" Grid.Column="3" FontSize="18" Margin="5,5,5,5"/>
 
     </Grid>
 </Window>
