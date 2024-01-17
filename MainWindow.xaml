@@ -10,7 +10,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="39"/>
             <RowDefinition Height="1*"/>
-            <RowDefinition Height="1*"/>
+            <RowDefinition Height="2*"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="100"/>
@@ -50,7 +50,7 @@
                 </TransformGroup>
             </Label.RenderTransform>
         </Label>
-        <TextBox x:Name="Data" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Margin="5,5,5,5"/>
+        <TextBox x:Name="Data" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Margin="5,5,5,5" FontFamily="Consolas"/>
         <TextBox x:Name="DeviceId" Margin="5,5,5,5" Grid.Column="2" TextAlignment="Center" FontSize="18" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
         <Button x:Name="StartButton" Content="侦听" Click="StartCapture" Grid.Column="3" FontSize="18" Margin="5,5,5,5"/>
 

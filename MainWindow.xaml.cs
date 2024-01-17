@@ -15,6 +15,7 @@ using System.Windows.Shapes;
 using System.Text.RegularExpressions;
 using UsbPcapDotNet;
 using System.Diagnostics.Tracing;
+using System.IO;
 
 namespace XFuze
 {
@@ -101,10 +102,14 @@ namespace XFuze
             }
         }
 
+        private StreamWriter writer;
+
         private void StartCapture(object sender, RoutedEventArgs e)
         {
             if (!bStarted)
             {
+                writer = new StreamWriter(new FileStream("XFuze_usbpcap.log", FileMode.Append, FileAccess.Write, FileShare.Read), Encoding.UTF8);
+                writer.WriteAsync("开始侦听-------\n");
                 bStarted = true;
                 var filter = Interfaces.SelectedItem.ToString();
                 var deviceid = int.Parse(DeviceId.Text);
@@ -112,7 +117,8 @@ namespace XFuze
                 usbPcapClient.DataRead += (sender, e) =>
                 {
                     var text = $"DATA READ Device:'{e.Header.device}'" + $" in?:{e.Header.In} " + $"func:'{e.Header.function}' " + $"len: {e.Data.Length} \n";
-                    if(e.Data.Length > 0) text += ToHexString(e.Data, " ");
+                    if(e.Data.Length > 0) text += ToHexString(e.Data, " ") + "\n";
+                    writer.WriteAsync(text);
                     Dispatcher.InvokeAsync(new Action(() => Data.Text = text), System.Windows.Threading.DispatcherPriority.Render);
                 };
                 usbPcapClient.start_capture();
@@ -120,8 +126,9 @@ namespace XFuze
             }
             else
             {
-                usbPcapClient.wait_for_exit_signal();
                 usbPcapClient.Dispose();
+                writer.WriteAsync("结束侦听-------\n");
+                writer?.Dispose();
                 bStarted = false;
                 StartButton.Content = "开始";
             }
@@ -129,7 +136,8 @@ namespace XFuze
 
         public static string ToHexString(IEnumerable<byte> bytes, string deliminator = "")
         {
-            return bytes.Aggregate(string.Empty, (current, b) => $"{current}{b:x2}{deliminator}")[..^deliminator.Length];
+            var str = bytes.Aggregate(string.Empty, (current, b) => $"{current}{b:x2}{deliminator}")[..^deliminator.Length];
+            return Regex.Replace(str, "(.{23}) (.{23}) ?", "$1  $2\n").ToUpper();
         }
     }
 }
