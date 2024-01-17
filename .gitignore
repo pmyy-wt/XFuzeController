@@ -1,0 +1,21 @@
+# IDE
+.vs
+.vscode
+.idea
+
+# Output
+bin
+obj
+Web/webapp/*
+!Web/webapp/favicon.ico
+
+# Nuget packages
+packages
+*.nupkg
+
+# Test result files
+TestResults
+*Tests/coverage.*.opencover.xml
+
+# node modules
+Web/node_modules
