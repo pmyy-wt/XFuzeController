@@ -67,6 +67,7 @@ namespace XFuze
                         item.Header = match.Groups[2];
                         item.DataContext = match.Groups[1];
                         Devices.Items.Add(item);
+                        itemLevel.Clear();
                         itemLevel.Add(item);
                         item.Selected += (object sender, RoutedEventArgs e)=> { DeviceId.Text = item.DataContext.ToString(); };
                         if (Regex.Match(device, bthPattern).Success)
@@ -108,7 +109,7 @@ namespace XFuze
         {
             if (!bStarted)
             {
-                writer = new StreamWriter(new FileStream("XFuze_usbpcap.log", FileMode.Append, FileAccess.Write, FileShare.Read), Encoding.UTF8);
+                writer = new StreamWriter(new FileStream("XFuze_usbpcap.log", FileMode.Append, FileAccess.Write, FileShare.Read, 8096, FileOptions.Asynchronous | FileOptions.WriteThrough), Encoding.UTF8);
                 writer.WriteAsync("开始侦听-------\n");
                 bStarted = true;
                 var filter = Interfaces.SelectedItem.ToString();
@@ -116,9 +117,10 @@ namespace XFuze
                 usbPcapClient = new USBPcapClient(filter, deviceid);
                 usbPcapClient.DataRead += (sender, e) =>
                 {
-                    var text = $"DATA READ Device:'{e.Header.device}'" + $" in?:{e.Header.In} " + $"func:'{e.Header.function}' " + $"len: {e.Data.Length} \n";
+                    var text = $"DATA READ Device:'{e.Header.device}'" + (e.Header.In ? " [IN] " : " [OUT] ") + $"func:'{e.Header.function}' " + $"len: {e.Data.Length} \n";
                     if(e.Data.Length > 0) text += ToHexString(e.Data, " ") + "\n";
-                    writer.WriteAsync(text);
+                    //writer.WriteAsync(text);
+                    Dispatcher.InvokeAsync(new Action(() => writer.WriteAsync(text)), System.Windows.Threading.DispatcherPriority.Background);
                     Dispatcher.InvokeAsync(new Action(() => Data.Text = text), System.Windows.Threading.DispatcherPriority.Render);
                 };
                 usbPcapClient.start_capture();
@@ -137,7 +139,7 @@ namespace XFuze
         public static string ToHexString(IEnumerable<byte> bytes, string deliminator = "")
         {
             var str = bytes.Aggregate(string.Empty, (current, b) => $"{current}{b:x2}{deliminator}")[..^deliminator.Length];
-            return Regex.Replace(str, "(.{23}) (.{23}) ?", "$1  $2\n").ToUpper();
+            return Regex.Replace(str, "(.{23}) (.{0,23}) ?", "$1  $2\n").ToUpper();
         }
     }
 }
