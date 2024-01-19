@@ -11,6 +11,9 @@
     <PackageReference Include="System.Data.DataSetExtensions" Version="4.5.0" />
   </ItemGroup>
   <ItemGroup>
+    <Reference Include="Nefarius.ViGEm.Client">
+      <HintPath>bin\Release\net8.0-windows\Nefarius.ViGEm.Client.dll</HintPath>
+    </Reference>
     <Reference Include="UsbPcapDotNet">
       <HintPath>..\..\UsbPcapDotNet\bin\Release\net6.0-windows\UsbPcapDotNet.dll</HintPath>
     </Reference>

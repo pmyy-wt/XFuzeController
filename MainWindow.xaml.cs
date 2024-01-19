@@ -16,6 +16,10 @@ using System.Text.RegularExpressions;
 using UsbPcapDotNet;
 using System.Diagnostics.Tracing;
 using System.IO;
+using Nefarius.ViGEm.Client;
+using Nefarius.ViGEm.Client.Exceptions;
+using Nefarius.ViGEm.Client.Targets;
+using Nefarius.ViGEm.Client.Targets.Xbox360;
 
 namespace XFuze
 {
@@ -27,17 +31,37 @@ namespace XFuze
         private bool bBluetoothFound = false;
         private bool bStarted = false;
         private USBPcapClient usbPcapClient;
+        private readonly IXbox360Controller controller;
 
         public MainWindow()
         {
             InitializeComponent();
+            controller = CreateViGEmController();
+        }
+
+        private IXbox360Controller CreateViGEmController()
+        {
+            try
+            {
+                var client = new ViGEmClient();
+                var controller = client.CreateXbox360Controller();
+                controller.AutoSubmitReport = false;
+                return controller;
+            }
+            catch (VigemBusNotFoundException)
+            {
+            }
+            catch (DllNotFoundException)
+            {
+            }
+            return null;
         }
 
         private void MainWindowLoaded(object sender, RoutedEventArgs e)
         {
             if(!USBPcapClient.is_usbpcap_upper_filter_installed())
             {
-                MessageBox.Show("未安装USBPcap，请先安装USBPcap！", "提示");
+                MessageBox.Show("未安装USBPcap驱动，请先安装USBPcap驱动！", "提示");
                 return;
             }
 
@@ -101,6 +125,9 @@ namespace XFuze
                 Interfaces.SelectedIndex = i;
                 if (bBluetoothFound) break;
             }
+
+            if(controller == null)
+                MessageBox.Show("未安装ViGEmBus驱动，请先安装ViGEmBus驱动！", "提示");
         }
 
         private StreamWriter writer;
@@ -117,23 +144,63 @@ namespace XFuze
                 usbPcapClient = new USBPcapClient(filter, deviceid);
                 usbPcapClient.DataRead += (sender, e) =>
                 {
-                    var text = $"DATA READ Device:'{e.Header.device}'" + (e.Header.In ? " [IN] " : " [OUT] ") + $"func:'{e.Header.function}' " + $"len: {e.Data.Length} \n";
-                    if(e.Data.Length > 0) text += ToHexString(e.Data, " ") + "\n";
-                    //writer.WriteAsync(text);
-                    Dispatcher.InvokeAsync(new Action(() => writer.WriteAsync(text)), System.Windows.Threading.DispatcherPriority.Background);
-                    Dispatcher.InvokeAsync(new Action(() => Data.Text = text), System.Windows.Threading.DispatcherPriority.Render);
+                    //var text = $"DATA READ Device:'{e.Header.device}'" + (e.Header.In ? " [IN] " : " [OUT] ") + $"func:'{e.Header.function}' " + $"len: {e.Data.Length} \n";
+                    //if(e.Data.Length > 0) text += ToHexString(e.Data, " ") + "\n";
+                    ////writer.WriteAsync(text);
+                    //Dispatcher.InvokeAsync(new Action(() => writer.WriteAsync(text)), System.Windows.Threading.DispatcherPriority.Background);
+                    //Dispatcher.InvokeAsync(new Action(() => Data.Text = text), System.Windows.Threading.DispatcherPriority.Render);
+                    if(e.Header.In && e.Data.Length > 0)
+                    {
+                        var data = ToHexString(e.Data, " ");
+                        Dispatcher.InvokeAsync(new Action(() => UpdateController(e.Data)), System.Windows.Threading.DispatcherPriority.Input);
+                        Dispatcher.InvokeAsync(new Action(() => Data.Text = data), System.Windows.Threading.DispatcherPriority.Render);
+                        Dispatcher.InvokeAsync(new Action(() => writer.WriteAsync(data + "\n\n")), System.Windows.Threading.DispatcherPriority.Background);
+                    }
                 };
+                controller.Connect();
                 usbPcapClient.start_capture();
                 StartButton.Content = "停止";
             }
             else
             {
+                controller.Disconnect();
                 usbPcapClient.Dispose();
                 writer.WriteAsync("结束侦听-------\n");
                 writer?.Dispose();
                 bStarted = false;
                 StartButton.Content = "开始";
             }
+        }
+
+        void UpdateController(byte[] data)
+        {
+            if (data.Length != 20) return;
+            byte[] input = new byte[10];
+            Buffer.BlockCopy(data, 9, input, 0, input.Length);
+            controller.SetButtonState(Xbox360Button.A,              (input[1] & (0x01)) > 0);
+            controller.SetButtonState(Xbox360Button.B,              (input[1] & (0x02)) > 0);
+            controller.SetButtonState(Xbox360Button.X,              (input[1] & (0x08)) > 0);
+            controller.SetButtonState(Xbox360Button.Y,              (input[1] & (0x10)) > 0);
+            controller.SetButtonState(Xbox360Button.LeftShoulder,   (input[1] & (0x40)) > 0);
+            controller.SetButtonState(Xbox360Button.RightShoulder,  (input[1] & (0x80)) > 0);
+            controller.SetButtonState(Xbox360Button.Back,           (input[2] & (0x08)) > 0);
+            controller.SetButtonState(Xbox360Button.Start,          (input[2] & (0x04)) > 0);
+            controller.SetButtonState(Xbox360Button.Guide,          (input[2] & (0x11)) == 1);
+            controller.SetButtonState(Xbox360Button.LeftThumb,      (input[2] & (0x20)) > 0);
+            controller.SetButtonState(Xbox360Button.RightThumb,     (input[2] & (0x40)) > 0);
+            controller.SetButtonState(Xbox360Button.Up,             (input[3] == 0 || input[3] == 1 || input[3] == 7));
+            controller.SetButtonState(Xbox360Button.Down,           (input[3] == 3 || input[3] == 4 || input[3] == 5));
+            controller.SetButtonState(Xbox360Button.Left,           (input[3] == 5 || input[3] == 6 || input[3] == 7));
+            controller.SetButtonState(Xbox360Button.Right,          (input[3] == 1 || input[3] == 2 || input[3] == 3));
+
+            controller.SetSliderValue(Xbox360Slider.LeftTrigger,    input[8]);
+            controller.SetSliderValue(Xbox360Slider.RightTrigger,   input[9]);
+
+            controller.SetAxisValue(Xbox360Axis.LeftThumbX,         (short)((input[4] << 8) - 0x8000));
+            controller.SetAxisValue(Xbox360Axis.LeftThumbY,         (short)(0x8000 - (input[5] << 8)));
+            controller.SetAxisValue(Xbox360Axis.RightThumbX,        (short)((input[6] << 8) - 0x8000));
+            controller.SetAxisValue(Xbox360Axis.RightThumbY,        (short)((input[7] << 8) - 0x8000));
+            controller.SubmitReport();
         }
 
         public static string ToHexString(IEnumerable<byte> bytes, string deliminator = "")
