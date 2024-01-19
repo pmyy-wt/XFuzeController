@@ -21,6 +21,7 @@ using Nefarius.ViGEm.Client.Exceptions;
 using Nefarius.ViGEm.Client.Targets;
 using Nefarius.ViGEm.Client.Targets.Xbox360;
 using System.Diagnostics;
+using System.ComponentModel;
 
 namespace XFuze
 {
@@ -38,6 +39,8 @@ namespace XFuze
         public MainWindow()
         {
             InitializeComponent();
+
+            taskbarIcon.Icon = System.Drawing.Icon.ExtractAssociatedIcon(System.Windows.Forms.Application.ExecutablePath);
             controller = CreateViGEmController();
         }
 
@@ -97,7 +100,7 @@ namespace XFuze
                         itemLevel.Clear();
                         itemLevel.Add(item);
                         item.Selected += (object sender, RoutedEventArgs e)=> { deviceId = int.Parse(item.DataContext.ToString()); };
-                        if (Regex.Match(device, bthPattern).Success)
+                        if (Regex.Match(device, bthPattern).Success && !bBluetoothFound)
                         { 
                             bBluetoothFound = true;
                             deviceId = int.Parse(item.DataContext.ToString());
@@ -133,7 +136,7 @@ namespace XFuze
 
             if (!bBluetoothFound)
             {
-                Data.Text = "未找到蓝牙适配器";
+                Data.Text = "未找到蓝牙适配器\n你可能未以管理员身份运行此程序";
                 Data.Foreground = Brushes.Red;
                 Data.FontSize = 18;
             }
@@ -142,7 +145,7 @@ namespace XFuze
                 MessageBox.Show("未安装ViGEmBus驱动，请先安装ViGEmBus驱动！", "提示");
         }
 
-        private StreamWriter writer;
+        //private StreamWriter writer;
 
         private void StartCapture(object sender, RoutedEventArgs e)
         {
@@ -151,8 +154,8 @@ namespace XFuze
                 Data.Text = "";
                 Data.Foreground = Brushes.Black;
                 Data.FontSize = 12;
-                writer = new StreamWriter(new FileStream("XFuze_usbpcap.log", FileMode.Append, FileAccess.Write, FileShare.Read, 8096, FileOptions.Asynchronous | FileOptions.WriteThrough), Encoding.UTF8);
-                writer.WriteAsync("开始侦听-------\n");
+                //writer = new StreamWriter(new FileStream("XFuze_usbpcap.log", FileMode.Append, FileAccess.Write, FileShare.Read, 8096, FileOptions.Asynchronous | FileOptions.WriteThrough), Encoding.UTF8);
+                //writer.WriteAsync("开始侦听-------\n");
                 bStarted = true;
                 var filter = Interfaces.SelectedItem.ToString();
                 usbPcapClient = new USBPcapClient(filter, deviceId);
@@ -168,19 +171,19 @@ namespace XFuze
                         var data = ToHexString(e.Data, " ");
                         Dispatcher.InvokeAsync(new Action(() => UpdateController(e.Data)), System.Windows.Threading.DispatcherPriority.Input);
                         Dispatcher.InvokeAsync(new Action(() => Data.Text = data), System.Windows.Threading.DispatcherPriority.Render);
-                        Dispatcher.InvokeAsync(new Action(() => writer.WriteAsync(data + "\n\n")), System.Windows.Threading.DispatcherPriority.Background);
+                        //Dispatcher.InvokeAsync(new Action(() => writer.WriteAsync(data + "\n\n")), System.Windows.Threading.DispatcherPriority.Background);
                     }
                 };
                 controller.Connect();
                 usbPcapClient.start_capture();
-                StartButton.Content = "停止";
+                StartButton.Content = "结束";
             }
             else
             {
                 controller.Disconnect();
                 usbPcapClient.Dispose();
-                writer.WriteAsync("结束侦听-------\n");
-                writer?.Dispose();
+                //writer.WriteAsync("结束侦听-------\n");
+                //writer?.Dispose();
                 bStarted = false;
                 StartButton.Content = "开始";
             }
@@ -225,9 +228,8 @@ namespace XFuze
 
         private void EnableHid(object sender, RoutedEventArgs e)
         {
-            var cmd = @"devcon.exe";
             Process p = new Process();
-            p.StartInfo.FileName = cmd;
+            p.StartInfo.FileName = AppContext.BaseDirectory + "\\devcon.exe";
             p.StartInfo.Arguments = @"enable ""HID\{00001124-0000-1000-8000-00805F9B34FB}_VID&000212D1_PID&A560&COL02""";
             p.StartInfo.UseShellExecute = false;
             p.StartInfo.RedirectStandardOutput = true;
@@ -252,7 +254,7 @@ namespace XFuze
             {
                 var p = Process.Start(new ProcessStartInfo
                 {
-                    FileName = "devcon.exe",
+                    FileName = AppContext.BaseDirectory + "\\devcon.exe",
                     Arguments = @"disable ""HID\{00001124-0000-1000-8000-00805F9B34FB}_VID&000212D1_PID&A560&COL02""",
                     UseShellExecute = false,
                     RedirectStandardOutput = true,
@@ -266,6 +268,30 @@ namespace XFuze
             {
                 MessageBox.Show(ex.ToString());
             }
+        }
+
+        private void ShowMain(object sender, RoutedEventArgs e)
+        {
+            Visibility = Visibility.Visible;
+            ShowInTaskbar = true;
+            Activate();
+        }
+
+        private void ExitClick(object sender, RoutedEventArgs e)
+        {
+            Application.Current.Shutdown();
+        }
+
+        private void WindowClosing(object sender, EventArgs e)
+        {
+            Visibility = Visibility.Hidden;
+            ShowInTaskbar = false;
+        }
+
+        protected override void OnClosing(CancelEventArgs e)
+        {
+            e.Cancel = bStarted;
+            base.OnClosing(e);
         }
     }
 }
