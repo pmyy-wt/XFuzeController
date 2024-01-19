@@ -20,6 +20,7 @@ using Nefarius.ViGEm.Client;
 using Nefarius.ViGEm.Client.Exceptions;
 using Nefarius.ViGEm.Client.Targets;
 using Nefarius.ViGEm.Client.Targets.Xbox360;
+using System.Diagnostics;
 
 namespace XFuze
 {
@@ -32,6 +33,7 @@ namespace XFuze
         private bool bStarted = false;
         private USBPcapClient usbPcapClient;
         private readonly IXbox360Controller controller;
+        private int deviceId = 0;
 
         public MainWindow()
         {
@@ -68,7 +70,7 @@ namespace XFuze
             var interfaces = USBPcapClient.find_usbpcap_filters();
             foreach (var filter in interfaces)
             {
-                Interfaces.Items.Add(filter);
+                Interfaces.Items.Add(filter.Trim());
             }
 
             Interfaces.SelectionChanged += (object sender, SelectionChangedEventArgs e) => {
@@ -81,6 +83,7 @@ namespace XFuze
                 var bthPattern = "Bluetooth|蓝牙";
                 List<TreeViewItem> itemLevel = new List<TreeViewItem>();
                 Devices.Items.Clear();
+                deviceId = 0;
                 foreach (var device in devTree)
                 {
                     if (device.Contains("\\??\\")) continue;
@@ -88,16 +91,17 @@ namespace XFuze
                     if(match.Success)
                     {
                         TreeViewItem item = new TreeViewItem();
-                        item.Header = match.Groups[2];
+                        item.Header = match.Groups[2].ToString().Trim();
                         item.DataContext = match.Groups[1];
                         Devices.Items.Add(item);
                         itemLevel.Clear();
                         itemLevel.Add(item);
-                        item.Selected += (object sender, RoutedEventArgs e)=> { DeviceId.Text = item.DataContext.ToString(); };
+                        item.Selected += (object sender, RoutedEventArgs e)=> { deviceId = int.Parse(item.DataContext.ToString()); };
                         if (Regex.Match(device, bthPattern).Success)
                         { 
                             bBluetoothFound = true;
-                            DeviceId.Text = item.DataContext.ToString();
+                            deviceId = int.Parse(item.DataContext.ToString());
+                            item.IsSelected = true;
                         }
                     }
                     
@@ -105,7 +109,7 @@ namespace XFuze
                     if (match.Success && itemLevel.Count > 0)
                     {
                         TreeViewItem itemChild = new TreeViewItem();
-                        itemChild.Header = match.Groups[2];
+                        itemChild.Header = match.Groups[2].ToString().Trim();
                         int level = match.Groups[1].Length / 2 - 2;
                         itemLevel.RemoveRange(level, itemLevel.Count - level);
                         itemLevel.Last().Items.Add(itemChild);
@@ -121,9 +125,17 @@ namespace XFuze
             };
 
             bBluetoothFound = false;
-            for(int i = 0; i < interfaces.Count; i++) {
+            for (int i = 0; i < interfaces.Count; i++)
+            {
                 Interfaces.SelectedIndex = i;
                 if (bBluetoothFound) break;
+            }
+
+            if (!bBluetoothFound)
+            {
+                Data.Text = "未找到蓝牙适配器";
+                Data.Foreground = Brushes.Red;
+                Data.FontSize = 18;
             }
 
             if(controller == null)
@@ -136,12 +148,14 @@ namespace XFuze
         {
             if (!bStarted)
             {
+                Data.Text = "";
+                Data.Foreground = Brushes.Black;
+                Data.FontSize = 12;
                 writer = new StreamWriter(new FileStream("XFuze_usbpcap.log", FileMode.Append, FileAccess.Write, FileShare.Read, 8096, FileOptions.Asynchronous | FileOptions.WriteThrough), Encoding.UTF8);
                 writer.WriteAsync("开始侦听-------\n");
                 bStarted = true;
                 var filter = Interfaces.SelectedItem.ToString();
-                var deviceid = int.Parse(DeviceId.Text);
-                usbPcapClient = new USBPcapClient(filter, deviceid);
+                usbPcapClient = new USBPcapClient(filter, deviceId);
                 usbPcapClient.DataRead += (sender, e) =>
                 {
                     //var text = $"DATA READ Device:'{e.Header.device}'" + (e.Header.In ? " [IN] " : " [OUT] ") + $"func:'{e.Header.function}' " + $"len: {e.Data.Length} \n";
@@ -197,9 +211,9 @@ namespace XFuze
             controller.SetSliderValue(Xbox360Slider.RightTrigger,   input[9]);
 
             controller.SetAxisValue(Xbox360Axis.LeftThumbX,         (short)((input[4] << 8) - 0x8000));
-            controller.SetAxisValue(Xbox360Axis.LeftThumbY,         (short)(0x8000 - (input[5] << 8)));
+            controller.SetAxisValue(Xbox360Axis.LeftThumbY,         (short)((~input[5] << 8) - 0x8000));
             controller.SetAxisValue(Xbox360Axis.RightThumbX,        (short)((input[6] << 8) - 0x8000));
-            controller.SetAxisValue(Xbox360Axis.RightThumbY,        (short)((input[7] << 8) - 0x8000));
+            controller.SetAxisValue(Xbox360Axis.RightThumbY,        (short)((~input[7] << 8) - 0x8000));
             controller.SubmitReport();
         }
 
@@ -207,6 +221,51 @@ namespace XFuze
         {
             var str = bytes.Aggregate(string.Empty, (current, b) => $"{current}{b:x2}{deliminator}")[..^deliminator.Length];
             return Regex.Replace(str, "(.{23}) (.{0,23}) ?", "$1  $2\n").ToUpper();
+        }
+
+        private void EnableHid(object sender, RoutedEventArgs e)
+        {
+            var cmd = @"devcon.exe";
+            Process p = new Process();
+            p.StartInfo.FileName = cmd;
+            p.StartInfo.Arguments = @"enable ""HID\{00001124-0000-1000-8000-00805F9B34FB}_VID&000212D1_PID&A560&COL02""";
+            p.StartInfo.UseShellExecute = false;
+            p.StartInfo.RedirectStandardOutput = true;
+            p.StartInfo.CreateNoWindow = true;
+
+            try
+            {
+                p.Start();
+                var output = p.StandardOutput.ReadToEnd();
+                p.WaitForExit();
+                MessageBox.Show(output);
+            }
+            catch(Exception ex) 
+            {
+                MessageBox.Show(ex.ToString());
+            }
+        }
+
+        private void DisableHid(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var p = Process.Start(new ProcessStartInfo
+                {
+                    FileName = "devcon.exe",
+                    Arguments = @"disable ""HID\{00001124-0000-1000-8000-00805F9B34FB}_VID&000212D1_PID&A560&COL02""",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    CreateNoWindow = true,
+                });
+                var output = p.StandardOutput.ReadToEnd();
+                p.WaitForExit();
+                MessageBox.Show(output);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.ToString());
+            }
         }
     }
 }

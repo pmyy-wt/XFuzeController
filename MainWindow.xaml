@@ -15,7 +15,7 @@
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="100"/>
             <ColumnDefinition/>
-            <ColumnDefinition Width="60"/>
+            <ColumnDefinition Width="Auto"/>
             <ColumnDefinition Width="110"/>
         </Grid.ColumnDefinitions>
         <Label Content="接口" HorizontalAlignment="Center" VerticalAlignment="Center" RenderTransformOrigin="0.5,0.506" FontSize="18" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Width="90" Height="33">
@@ -39,7 +39,11 @@
                 </TransformGroup>
             </Label.RenderTransform>
         </Label>
-        <TreeView x:Name="Devices" Grid.Row="1" Grid.Column="1" Margin="5,5,5,5" Grid.ColumnSpan="2"/>
+        <TreeView x:Name="Devices" Grid.Row="1" Grid.Column="1" Margin="5,5,5,5" Grid.ColumnSpan="2">
+            <TreeViewItem Header="TreeViewItem" IsExpanded="True">
+            <TreeViewItem Header="TreeViewItem"/>
+            </TreeViewItem>
+        </TreeView>
         <Label Content="数据" HorizontalAlignment="Center" Margin="0,5,0,0" VerticalAlignment="Top" RenderTransformOrigin="0.5,0.493" FontSize="18" HorizontalContentAlignment="Center" VerticalContentAlignment="Center" Width="90" Height="33" Grid.Row="2">
             <Label.RenderTransform>
                 <TransformGroup>
@@ -51,8 +55,8 @@
             </Label.RenderTransform>
         </Label>
         <TextBox x:Name="Data" Grid.Row="2" Grid.Column="1" Grid.ColumnSpan="3" Margin="5,5,5,5" FontFamily="Consolas"/>
-        <TextBox x:Name="DeviceId" Margin="5,5,5,5" Grid.Column="2" TextAlignment="Center" FontSize="18" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"/>
         <Button x:Name="StartButton" Content="侦听" Click="StartCapture" Grid.Column="3" FontSize="18" Margin="5,5,5,5"/>
+        <Button Grid.Column="3" Content="禁用原手柄" Click="DisableHid" Margin="5,5,5,5" Grid.Row="1" FontSize="18" VerticalAlignment="Top" Height="29"/>
 
     </Grid>
 </Window>
