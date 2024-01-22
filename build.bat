@@ -1,0 +1,1 @@
+dotnet publish .\XFuze.csproj -c release -p:PublishSingleFile=true --sc false -f net8.0-windows

@@ -22,6 +22,7 @@ using Nefarius.ViGEm.Client.Targets;
 using Nefarius.ViGEm.Client.Targets.Xbox360;
 using System.Diagnostics;
 using System.ComponentModel;
+using System.Windows.Threading;
 
 namespace XFuze
 {
@@ -33,37 +34,67 @@ namespace XFuze
         private bool bBluetoothFound = false;
         private bool bStarted = false;
         private USBPcapClient usbPcapClient;
-        private readonly IXbox360Controller controller;
         private int deviceId = 0;
+        private ViGEmClient client;
+        private List<XFuzeController> controllers = new List<XFuzeController>();
+        private readonly List<DispatcherTimer> timers = new List<DispatcherTimer>() { new DispatcherTimer(), new DispatcherTimer(), new DispatcherTimer(), new DispatcherTimer(), };
+        private List<Grid> CheckboxBg = new List<Grid>();
 
         public MainWindow()
         {
             InitializeComponent();
 
             taskbarIcon.Icon = System.Drawing.Icon.ExtractAssociatedIcon(System.Windows.Forms.Application.ExecutablePath);
-            controller = CreateViGEmController();
+            client = CreateViGEmClient();
         }
 
-        private IXbox360Controller CreateViGEmController()
+        private ViGEmClient CreateViGEmClient()
         {
             try
             {
-                var client = new ViGEmClient();
-                var controller = client.CreateXbox360Controller();
-                controller.AutoSubmitReport = false;
-                return controller;
+                return new ViGEmClient();
             }
             catch (VigemBusNotFoundException)
             {
+                MessageBox.Show("未安装ViGEmBus驱动，请先安装ViGEmBus驱动！", "提示");
             }
             catch (DllNotFoundException)
             {
+                MessageBox.Show("ViGEmClient DLL 异常！", "提示");
             }
             return null;
         }
 
         private void MainWindowLoaded(object sender, RoutedEventArgs e)
         {
+            //Connection.Content = $"0x{0x0:x4}";
+            //CidChannel.Content = $"0x{0x0:x4}";
+            if(client != null)
+            {
+                CheckboxBg.AddRange(new List<Grid>() { cb1_bg, cb2_bg, cb3_bg, cb4_bg });
+                List<CheckBox> checkBoxes = (new List<CheckBox>() { cb1, cb2, cb3, cb4});
+                for (int i = 0; i < 4; ++i) 
+                {
+                    int j = i;
+                    var controller = new XFuzeController(client);
+                    controllers.Add(controller);
+                    checkBoxes[i].Checked += (sender, e)=>controller.Enable = true;
+                    checkBoxes[i].Unchecked += (sender, e)=>controller.Enable = false;
+                    checkBoxes[i].IsEnabled = true;
+
+                    var tooltip = new ToolTip() { };
+                    CheckboxBg[i].ToolTip = tooltip;
+                    CheckboxBg[i].ToolTipOpening += (sender, e) => tooltip.Content = $"0x{controller.Connection:x4}\n0x{controller.CidChannel:x4}".ToUpper();
+
+                    timers[i].Interval = TimeSpan.FromMilliseconds(200);
+                    timers[i].Tick += (sender, e)=> {
+                        CheckboxBg[j].Background = null;
+                        ((DispatcherTimer)sender).Stop();
+                    };
+                }
+                cb1.IsChecked = true;
+            }
+
             if(!USBPcapClient.is_usbpcap_upper_filter_installed())
             {
                 MessageBox.Show("未安装USBPcap驱动，请先安装USBPcap驱动！", "提示");
@@ -77,7 +108,6 @@ namespace XFuze
             }
 
             Interfaces.SelectionChanged += (object sender, SelectionChangedEventArgs e) => {
-                //MessageBox.Show(e.AddedItems[0].ToString(), "消息");
                 var devices = USBPcapClient.enumerate_print_usbpcap_interactive(e.AddedItems[0].ToString());
 
                 var devTree = devices.Split("\n");
@@ -94,7 +124,7 @@ namespace XFuze
                     if(match.Success)
                     {
                         TreeViewItem item = new TreeViewItem();
-                        item.Header = match.Groups[2].ToString().Trim();
+                        item.Header = $"({match.Groups[1]}) {match.Groups[2].ToString().Trim()}";
                         item.DataContext = match.Groups[1];
                         Devices.Items.Add(item);
                         itemLevel.Clear();
@@ -119,12 +149,6 @@ namespace XFuze
                         itemLevel.Add(itemChild);
                     }
                 }
-                //MessageBox.Show(devices, "消息");
-                //Devices.Items.Clear();
-                //foreach (var device in devices)
-                //{
-                //    Devices.Items.Add(device);
-                //}
             };
 
             bBluetoothFound = false;
@@ -136,13 +160,10 @@ namespace XFuze
 
             if (!bBluetoothFound)
             {
-                Data.Text = "未找到蓝牙适配器\n你可能未以管理员身份运行此程序";
+                Data.Text = "未找到蓝牙适配器\n您可能未以管理员身份运行此程序";
                 Data.Foreground = Brushes.Red;
                 Data.FontSize = 18;
             }
-
-            if(controller == null)
-                MessageBox.Show("未安装ViGEmBus驱动，请先安装ViGEmBus驱动！", "提示");
         }
 
         //private StreamWriter writer;
@@ -169,18 +190,17 @@ namespace XFuze
                     if(e.Header.In && e.Data.Length > 0)
                     {
                         var data = ToHexString(e.Data, " ");
-                        Dispatcher.InvokeAsync(new Action(() => UpdateController(e.Data)), System.Windows.Threading.DispatcherPriority.Input);
+                        Dispatcher.InvokeAsync(new Action(() => UpdateControllers(e.Data)), System.Windows.Threading.DispatcherPriority.Input);
                         Dispatcher.InvokeAsync(new Action(() => Data.Text = data), System.Windows.Threading.DispatcherPriority.Render);
                         //Dispatcher.InvokeAsync(new Action(() => writer.WriteAsync(data + "\n\n")), System.Windows.Threading.DispatcherPriority.Background);
                     }
                 };
-                controller.Connect();
+
                 usbPcapClient.start_capture();
                 StartButton.Content = "结束";
             }
             else
             {
-                controller.Disconnect();
                 usbPcapClient.Dispose();
                 //writer.WriteAsync("结束侦听-------\n");
                 //writer?.Dispose();
@@ -189,35 +209,21 @@ namespace XFuze
             }
         }
 
-        void UpdateController(byte[] data)
+        void UpdateControllers(byte[] data)
         {
             if (data.Length != 20) return;
-            byte[] input = new byte[10];
-            Buffer.BlockCopy(data, 9, input, 0, input.Length);
-            controller.SetButtonState(Xbox360Button.A,              (input[1] & (0x01)) > 0);
-            controller.SetButtonState(Xbox360Button.B,              (input[1] & (0x02)) > 0);
-            controller.SetButtonState(Xbox360Button.X,              (input[1] & (0x08)) > 0);
-            controller.SetButtonState(Xbox360Button.Y,              (input[1] & (0x10)) > 0);
-            controller.SetButtonState(Xbox360Button.LeftShoulder,   (input[1] & (0x40)) > 0);
-            controller.SetButtonState(Xbox360Button.RightShoulder,  (input[1] & (0x80)) > 0);
-            controller.SetButtonState(Xbox360Button.Back,           (input[2] & (0x08)) > 0);
-            controller.SetButtonState(Xbox360Button.Start,          (input[2] & (0x04)) > 0);
-            controller.SetButtonState(Xbox360Button.Guide,          (input[2] & (0x11)) == 1);
-            controller.SetButtonState(Xbox360Button.LeftThumb,      (input[2] & (0x20)) > 0);
-            controller.SetButtonState(Xbox360Button.RightThumb,     (input[2] & (0x40)) > 0);
-            controller.SetButtonState(Xbox360Button.Up,             (input[3] == 0 || input[3] == 1 || input[3] == 7));
-            controller.SetButtonState(Xbox360Button.Down,           (input[3] == 3 || input[3] == 4 || input[3] == 5));
-            controller.SetButtonState(Xbox360Button.Left,           (input[3] == 5 || input[3] == 6 || input[3] == 7));
-            controller.SetButtonState(Xbox360Button.Right,          (input[3] == 1 || input[3] == 2 || input[3] == 3));
 
-            controller.SetSliderValue(Xbox360Slider.LeftTrigger,    input[8]);
-            controller.SetSliderValue(Xbox360Slider.RightTrigger,   input[9]);
-
-            controller.SetAxisValue(Xbox360Axis.LeftThumbX,         (short)((input[4] << 8) - 0x8000));
-            controller.SetAxisValue(Xbox360Axis.LeftThumbY,         (short)((~input[5] << 8) - 0x8000));
-            controller.SetAxisValue(Xbox360Axis.RightThumbX,        (short)((input[6] << 8) - 0x8000));
-            controller.SetAxisValue(Xbox360Axis.RightThumbY,        (short)((~input[7] << 8) - 0x8000));
-            controller.SubmitReport();
+            for (int i = 0; i < controllers.Count; ++i)
+            {
+                var controller = controllers[i];
+                if (controller.Parse(data))
+                {
+                    CheckboxBg[i].Background = Brushes.LightCyan;
+                    timers[i].Stop();
+                    timers[i].Start();
+                    break;
+                }
+            }
         }
 
         public static string ToHexString(IEnumerable<byte> bytes, string deliminator = "")
